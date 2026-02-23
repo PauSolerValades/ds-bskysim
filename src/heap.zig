@@ -7,7 +7,10 @@ const expect = testing.expect;
 const expectEqual = testing.expectEqual;
 const expectError = testing.expectError;
 
-// this code is adapted from the std.PriorityQueue
+pub fn Heap(comptime T: type, comptime Context: type, comptime compareFn: fn (context: Context, a: T, b: T) Order) type {
+    return DaryHeap(T, 2, Context, compareFn);
+}
+// this code has been adapted from the std.PriorityQueue implementation
 
 /// Heap data structure for storing generic data. Initialize with empty.
 /// if no context is provided, and with `init(context)` if there is.
@@ -17,19 +20,38 @@ const expectError = testing.expectError;
 /// if the third argument should be popped first.
 /// For example, to make `pop` return the smallest number, provide
 /// `fn lessThan(context: void, a: T, b: T) Order { _ = context; return std.math.order(a, b); }`
-pub fn Heap(comptime T: type, comptime Context: type, comptime compareFn: fn (context: Context, a: T, b: T) Order) type {
+pub fn DaryHeap(comptime T: type, d: usize, comptime Context: type, comptime compareFn: fn (context: Context, a: T, b: T) Order) type {
     return struct {
         const Self = @This();
 
         items: []T,
         capacity: usize,
         context: Context,
+        d: usize,
         
+        /// checks if T is a struct. If it isnt we have to avoid
+        /// checking for the @hasField
+        const is_intrusive = blk: {
+            if (@typeInfo(T) == .@"struct") {
+                break :blk @hasField(T, "heap_index");
+            }
+            break :blk false;
+        };
+        
+        /// Done for the intrusive event in heap. If the struct is 
+        inline fn writeItem(self: *Self, index: usize, item: T) void {
+            self.items[index] = item;
+            if (is_intrusive) {
+                self.items[index].heap_index = index;
+            }
+        }
+
         pub fn init(context: Context) Self {
             return .{ 
                 .items = &.{}, 
                 .capacity = 0, 
-                .context = context 
+                .context = context,
+                .d = d,
             };
         }
 
@@ -37,6 +59,7 @@ pub fn Heap(comptime T: type, comptime Context: type, comptime compareFn: fn (co
             .items = &.{},
             .capacity = 0,
             .context = {},
+            .d = d,
         } else @compileError("Cannot use empty with a non-void context. Use .init(context");
         
         /// Free memory used by the queue.
@@ -53,7 +76,7 @@ pub fn Heap(comptime T: type, comptime Context: type, comptime compareFn: fn (co
 
         fn addUnchecked(self: *Self, elem: T) void {
             self.items.len += 1;
-            self.items[self.items.len - 1] = elem;
+            self.writeItem(self.items.len - 1, elem);
             siftUp(self, self.items.len - 1);
         }
 
@@ -61,13 +84,16 @@ pub fn Heap(comptime T: type, comptime Context: type, comptime compareFn: fn (co
             const child = self.items[start_index];
             var child_index = start_index;
             while (child_index > 0) {
-                const parent_index = ((child_index - 1) >> 1);
+                // const parent_index = ((child_index - 1) >> 1); // for d = 2
+                const parent_index = ((child_index - 1) / self.d );
                 const parent = self.items[parent_index];
                 if (compareFn(self.context, child, parent) != .lt) break;
-                self.items[child_index] = parent;
+
+                self.writeItem(child_index, parent);
+
                 child_index = parent_index;
             }
-            self.items[child_index] = child;
+            self.writeItem(child_index, child);
         }
 
         /// Add each element in `items` to the queue.
@@ -129,7 +155,6 @@ pub fn Heap(comptime T: type, comptime Context: type, comptime compareFn: fn (co
         }
 
         
-
         /// Returns a slice of all the items plus the extra capacity, whose memory
         /// contents are `undefined`.
         fn allocatedSlice(self: Self) []T {
@@ -141,20 +166,26 @@ pub fn Heap(comptime T: type, comptime Context: type, comptime compareFn: fn (co
             const target_element = self.items[target_index];
             var index = target_index;
             while (true) {
-                var lesser_child_i = (std.math.mul(usize, index, 2) catch break) | 1;
-                if (!(lesser_child_i < self.items.len)) break;
-
-                const next_child_i = lesser_child_i + 1;
-                if (next_child_i < self.items.len and compareFn(self.context, self.items[next_child_i], self.items[lesser_child_i]) == .lt) {
-                    lesser_child_i = next_child_i;
+                const first_child_i = (std.math.mul(usize, index, d) catch break) + 1;
+                if (!(first_child_i < self.items.len)) break;
+    
+                var lesser_child_i = first_child_i;
+                var current_child_i = first_child_i + 1;
+                
+                const end_child_i = @min(self.items.len, first_child_i + d);
+                
+                while (current_child_i < end_child_i) : (current_child_i += 1) {
+                    if (compareFn(self.context, self.items[current_child_i], self.items[lesser_child_i]) == .lt) {
+                        lesser_child_i = current_child_i;
+                    }
                 }
-
                 if (compareFn(self.context, target_element, self.items[lesser_child_i]) == .lt) break;
-
-                self.items[index] = self.items[lesser_child_i];
+                
+                self.writeItem(index, self.items[lesser_child_i]);
+               
                 index = lesser_child_i;
             }
-            self.items[index] = target_element;
+            self.writeItem(index, target_element);
         }
 
         /// PriorityQueue takes ownership of the passed in slice. The slice must have been
@@ -165,6 +196,7 @@ pub fn Heap(comptime T: type, comptime Context: type, comptime compareFn: fn (co
                 .items = items,
                 .capacity = items.len,
                 .context = context,
+                .d = d,
             };
 
             var i = self.items.len >> 1;
@@ -287,6 +319,8 @@ pub fn Heap(comptime T: type, comptime Context: type, comptime compareFn: fn (co
             print("capacity: {}", .{self.cap});
             print(" }}\n", .{});
         }
+        
+        
     };
 }
 
@@ -657,3 +691,102 @@ test "add and remove min heap with context comparator" {
     try expectEqual(@as(usize, 0), queue.remove());
     try expectEqual(@as(usize, 5), queue.remove());
 }
+
+fn lessThanEvent(context: void, a: Event, b: Event) Order {
+    _ = context;
+    return std.math.order(a.priority, b.priority);
+}
+
+const Event = struct {
+    heap_index: usize = 0,
+    priority: f64,
+
+};
+
+const EHlt = Heap(Event, void, lessThanEvent);
+
+test "intrusive behaviour" {
+    var queue: EHlt = .empty;
+    defer queue.deinit(ta);
+
+    const e1 = Event{ .priority = 1 };
+    const e2 = Event{ .priority = 2 };
+    const e3 = Event{ .priority = 3 };
+    const e4 = Event{ .priority = 4 };
+    
+    try queue.add(ta, e4);
+    try queue.add(ta, e3);
+    try queue.add(ta, e2);
+    try queue.add(ta, e1);
+    try expectEqual(@as(f64, 1), queue.remove().priority);
+    try expectEqual(@as(f64, 2), queue.remove().priority);
+    try expectEqual(@as(f64, 3), queue.remove().priority);
+    try expectEqual(@as(f64, 4), queue.remove().priority);
+}
+
+test "add and remove min heap multpile leafs" {
+    inline for (.{ 2, 3, 4, 8 }) |d| {
+        
+        const DHlt = DaryHeap(u32, d, void, lessThan);
+        var queue: DHlt = .empty;
+        defer queue.deinit(ta);
+
+        try queue.add(ta, 54);
+        try queue.add(ta, 12);
+        try queue.add(ta, 7);
+        try queue.add(ta, 23);
+        try queue.add(ta, 25);
+        try queue.add(ta, 13);
+        try expectEqual(@as(u32, 7), queue.remove());
+        try expectEqual(@as(u32, 12), queue.remove());
+        try expectEqual(@as(u32, 13), queue.remove());
+        try expectEqual(@as(u32, 23), queue.remove());
+        try expectEqual(@as(u32, 25), queue.remove());
+        try expectEqual(@as(u32, 54), queue.remove());
+    }
+}
+
+test "add and remove same min heap multpile leafs" {
+    inline for (.{ 3, 4, 8 }) |d| {
+        
+        const DHlt = DaryHeap(u32, d, void, lessThan);
+        var queue: DHlt = .empty;
+        defer queue.deinit(ta);
+
+
+        try queue.add(ta, 1);
+        try queue.add(ta, 1);
+        try queue.add(ta, 2);
+        try queue.add(ta, 2);
+        try queue.add(ta, 1);
+        try queue.add(ta, 1);
+        try expectEqual(@as(u32, 1), queue.remove());
+        try expectEqual(@as(u32, 1), queue.remove());
+        try expectEqual(@as(u32, 1), queue.remove());
+        try expectEqual(@as(u32, 1), queue.remove());
+        try expectEqual(@as(u32, 2), queue.remove());
+        try expectEqual(@as(u32, 2), queue.remove());
+    }
+}
+
+
+test "edge case 3 elements multpile leafs" {
+
+    inline for (.{ 2, 3, 4, 8 }) |d| {
+        
+        const DHlt = DaryHeap(u32, d, void, lessThan);
+        var queue: DHlt = .empty;
+        defer queue.deinit(ta);
+
+
+        try queue.add(ta, 9);
+        try queue.add(ta, 3);
+        try queue.add(ta, 2);
+        try expectEqual(@as(u32, 2), queue.remove());
+        try expectEqual(@as(u32, 3), queue.remove());
+        try expectEqual(@as(u32, 9), queue.remove());
+
+    }
+}
+
+

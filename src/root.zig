@@ -1,6 +1,8 @@
-//! By convention, root.zig is the root source file when making a package.
-const std = @import("std");
-const Io = std.Io;
+const heap = @import("heap.zig");
 
+pub const Heap = heap.Heap;
+pub const DaryHeap = heap.DaryHeap;
 
-pub const StructHeap = @import("structheap.zig").Heap;
+test "test" {
+    _ = @import("heap.zig");
+}
