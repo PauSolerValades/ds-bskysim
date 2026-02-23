@@ -2,12 +2,13 @@
 
 This is a Heap implementation for Zig. Its the same code basis as `std.PriorityQueue` from the Zig Standard Library with the following additions:
 - Intrusive Index on struct for $O(1)$ access to the elements.
+- Having a $O(1)$ access simplifies the removal from $O(N)$ to $O(log_2(N))$ (or $O(d log_d N)$)
 - $d$-ary Heap implementation.
 
 As I am writing this (23-02-26) this is also a rewrite of the `std.PriorityQueue` to be more aligned with the current standard for data structures, as `ArrayList`: not accepting an allocator inside of them anymore.
 
 
-## O(1) Intrusive Access
+## O(1) Access Removal
 
 Accessing an arbitrary element of a Heap is not optimal, it needs to go through all the list to find the element, and the inner array is not sorted. I needed for a project to access several elements very fast, so using `std.LinkedList` as inspiration, I've added some compile time checks to the struct to use an intrusive index of a struct.
 
@@ -70,6 +71,12 @@ inline fn writeItem(self: *Self, index: usize, item: T) void {
 ```
 
 Obviously if you just have a simple type and you want to use this, wrap the simple type into an struct.
+
+## $O(log N)$ arbitrary Removal
+
+In a Heap the usual operation is to pop the first element: that is a $O(log N)$ cost, access $O(1)$ because it's the first element and the swiftUp is $O(log N)$, and the intrusive index does not improve this, it was already optimal.
+
+However, removal of an arbitrary element is $O(N)$ due to the look up of the element on the list, as it's not sorted. Here, using the intrusive access makes the removal of _any_ element of the heap $O(log N)$, as we have $O(1)$ access skipping the costly part, which is to search for the actual element to remove, bumping it down from $O(N)$ to $O(log N)$.
 
 ## d Children per Node 
 

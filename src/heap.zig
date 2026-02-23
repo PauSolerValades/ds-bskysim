@@ -127,9 +127,12 @@ pub fn DaryHeap(comptime T: type, d: usize, comptime Context: type, comptime com
         /// order.
         pub fn removeIndex(self: *Self, index: usize) T {
             assert(self.items.len > index);
+            
             const last = self.items[self.items.len - 1];
             const item = self.items[index];
-            self.items[index] = last;
+            
+            self.writeItem(index, last);
+            //self.items[index] = last;
             self.items.len -= 1;
 
             if (index == self.items.len) {
@@ -137,7 +140,7 @@ pub fn DaryHeap(comptime T: type, d: usize, comptime Context: type, comptime com
             } else if (index == 0) {
                 siftDown(self, index);
             } else {
-                const parent_index = ((index - 1) >> 1);
+                const parent_index = ((index - 1) / self.d );
                 const parent = self.items[parent_index];
                 if (compareFn(self.context, last, parent) == .gt) {
                     siftDown(self, index);
