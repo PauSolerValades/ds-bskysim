@@ -12,14 +12,14 @@ pub fn PagedBitSet(comptime n: usize) type {
         pages: ArrayList(DynamicBitSet),
         N: usize,
         C: usize,
-        total_items: usize, // the number of different posts (which is C*pages.items.len + offset)
+        len: usize, // the number of different posts (which is C*pages.items.len + offset)
         
 
         const Self = @This();
 
         pub const empty: Self = .{
             .pages = .empty,
-            .total_items = 0,
+            .len = 0,
             .N = 0,
             .C = page_count,
         };
@@ -33,7 +33,7 @@ pub fn PagedBitSet(comptime n: usize) type {
                 .pages = pages,
                 .N = N,
                 .C = page_count,
-                .total_items = 0,
+                .len = 0,
             };
         }
 
@@ -49,7 +49,7 @@ pub fn PagedBitSet(comptime n: usize) type {
                 .pages = p,
                 .N = N,
                 .C = page_count,
-                .total_items = 0,
+                .len = 0,
             };
         }
 
@@ -75,6 +75,7 @@ pub fn PagedBitSet(comptime n: usize) type {
 
             const j_in_page = @as(usize, j & (page_count - 1));
             self.pages.items[page].set(@as(usize, i << n) + j_in_page);
+            self.len += 1;
         }
         
         pub fn isSet(self: *Self, i: usize, j: usize) bool {
