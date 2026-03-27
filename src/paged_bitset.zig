@@ -86,7 +86,7 @@ pub fn PagedBitSet(comptime n: usize) type {
             return self.pages.items[page].isSet(@as(usize, i << n) + j_in_page);
         }
         
-        pub fn ensurePostCapacity(self: *Self, gpa: Allocator, j: usize) !void {
+        pub fn ensureItemCapacity(self: *Self, gpa: Allocator, j: usize) !void {
             const required_pages = (j >> n) + 1;
             
             while (self.pages.items.len < required_pages) {
