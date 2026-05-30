@@ -6,16 +6,16 @@ const Allocator = std.mem.Allocator;
 /// type is the struct you wanna hold
 /// n is the power of 2 which will be used as shelf_count
 pub fn SegmentedMultiArrayList(comptime Book: type, comptime n: usize) type {
-    const shelf_count = @as(usize, 1 << n); // lovely! 
-    
+    const shelf_count = @as(usize, 1 << n); // lovely!
+
     return struct {
- 
-        // bookshelf is the whole struct 
-        // shelf is the actual list 
+
+        // bookshelf is the whole struct
+        // shelf is the actual list
         // book is the item you wanna access
         bookshelf: ArrayList(MAList(Book)),
         len: usize, // elements in the bookshelf
-    
+
         const Self = @This();
 
         pub const empty: Self = .{
@@ -33,14 +33,14 @@ pub fn SegmentedMultiArrayList(comptime Book: type, comptime n: usize) type {
                 bookshelf.appendAssumeCapacity(try .initCapacity(gpa, shelf_count));
             }
             return .{
-                .bookshelf = bookshelf, 
+                .bookshelf = bookshelf,
                 .len = 0,
             };
         }
-        
+
         // assumes arraylist capacity, but not MAList as it's already capacitated
         pub fn append(self: *Self, gpa: Allocator, element: Book) !void {
-            if (self.len == shelf_count*self.bookshelf.items.len) { // have we ran out of space?
+            if (self.len == shelf_count * self.bookshelf.items.len) { // have we ran out of space?
                 const new_shelf: MAList(Book) = try .initCapacity(gpa, shelf_count);
                 try self.bookshelf.append(gpa, new_shelf);
             }
@@ -53,18 +53,25 @@ pub fn SegmentedMultiArrayList(comptime Book: type, comptime n: usize) type {
         pub fn access(self: *Self, i: usize) Book {
             return self.bookshelf.items[@as(usize, i >> n)].get(i & (shelf_count - 1));
         }
-        
+
         pub fn accessField(self: *Self, i: usize, comptime field: MAList(Book).Field) @FieldType(Book, @tagName(field)) {
             const current_shelf = i >> n;
             const book = i & (shelf_count - 1);
-            
+
             return self.bookshelf.items[current_shelf].items(field)[book];
         }
+
         pub fn deinit(self: *Self, gpa: Allocator) void {
             for (self.bookshelf.items) |*shelf| {
                 shelf.deinit(gpa);
             }
             self.bookshelf.deinit(gpa);
+        }
+
+        pub fn clearRetainingCapacity(self: *Self) void {
+            for (self.bookshelf.items) |*shelf| {
+                shelf.clearRetainingCapacity();
+            }
         }
     };
 }
@@ -81,14 +88,14 @@ test "try it out :D" {
     var bs: SegmentedMultiArrayList(Element, n) = .empty;
     defer bs.deinit(ta);
     try expect(bs.len == 0);
-    
+
     for (0..10000) |i| {
         const a: u32 = @intCast(i);
-        const e = Element{ .author =  a, .id = a};
+        const e = Element{ .author = a, .id = a };
         try bs.append(ta, e);
     }
 
-    const shelf_count = @as(usize, 1 << n); // lovely! 
+    const shelf_count = @as(usize, 1 << n); // lovely!
     try expect(bs.len == 10000);
     try expect(bs.getShelves() == @as(usize, @divTrunc(10000, shelf_count)));
 
