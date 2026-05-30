@@ -138,7 +138,7 @@ test "try it out :D" {
     try expect(!page0.isSet(130));
 
     // Trigger an allocation for a new page (Post 20)
-    try pbs.ensurePostCapacity(ta, 20);
+    try pbs.ensureItemCapacity(ta, 20);
     try expect(pbs.pages.items.len == 2);
 
     // Set a bit on the brand new page
