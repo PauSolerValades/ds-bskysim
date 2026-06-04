@@ -27,7 +27,7 @@ pub fn SegmentedMultiArrayList(comptime Book: type, comptime n: usize) type {
             return self.bookshelf.items.len;
         }
 
-        pub fn initCapacity(gpa: Allocator, shelves: usize) SegmentedMultiArrayList {
+        pub fn initCapacity(gpa: Allocator, shelves: usize) !SegmentedMultiArrayList {
             var bookshelf: ArrayList(MAList(Book)) = try .initCapacity(gpa, shelves);
             for (0..shelves) |_| {
                 bookshelf.appendAssumeCapacity(try .initCapacity(gpa, shelf_count));
