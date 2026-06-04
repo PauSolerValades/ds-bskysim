@@ -19,7 +19,7 @@ pub fn PagedBitSet(comptime n: usize) type {
             .pages = .empty,
             .len = 0,
             .N = 0,
-            .C = page_count,
+            .C = page_count, //every page has 2^n users
         };
 
         pub fn init(gpa: Allocator, N: usize) !PagedBitSet(n) {
@@ -69,7 +69,7 @@ pub fn PagedBitSet(comptime n: usize) type {
         }
 
         pub fn set(self: *Self, i: usize, j: usize) void {
-            std.debug.assert(i >= 0 and i <= self.N);
+            std.debug.assert(i >= 0 and i < self.N);
 
             const page = @as(usize, j >> n);
             std.debug.assert(page < self.pages.items.len);
@@ -80,9 +80,9 @@ pub fn PagedBitSet(comptime n: usize) type {
         }
 
         pub fn isSet(self: *Self, i: usize, j: usize) bool {
-            std.debug.assert(i >= 0 and i <= self.N);
+            std.debug.assert(i >= 0 and i < self.N);
             const page = @as(usize, j >> n);
-            std.debug.assert(page <= self.pages.items.len);
+            std.debug.assert(page < self.pages.items.len);
 
             const j_in_page = @as(usize, j & (page_count - 1));
             return self.pages.items[page].isSet(@as(usize, i << n) + j_in_page);
