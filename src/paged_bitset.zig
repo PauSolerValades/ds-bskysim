@@ -72,7 +72,7 @@ pub fn PagedBitSet(comptime n: usize) type {
             std.debug.assert(i >= 0 and i <= self.N);
 
             const page = @as(usize, j >> n);
-            std.debug.assert(page <= self.pages.items.len);
+            std.debug.assert(page < self.pages.items.len);
 
             const j_in_page = @as(usize, j & (page_count - 1));
             self.pages.items[page].set(@as(usize, i << n) + j_in_page);
