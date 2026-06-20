@@ -59,6 +59,7 @@ pub fn PagedBitSet(comptime n: usize) type {
             for (self.pages.items) |*page| {
                 page.unsetAll();
             }
+            self.len = 0;
         }
 
         pub fn deinit(self: *Self, gpa: Allocator) void {

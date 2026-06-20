@@ -72,6 +72,7 @@ pub fn SegmentedMultiArrayList(comptime Book: type, comptime n: usize) type {
             for (self.bookshelf.items) |*shelf| {
                 shelf.clearRetainingCapacity();
             }
+            self.len = 0;
         }
     };
 }
