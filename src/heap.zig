@@ -28,7 +28,7 @@ pub fn DaryHeap(comptime T: type, d: usize, comptime Context: type, comptime com
         capacity: usize,
         context: Context,
         d: usize,
-        
+
         /// checks if T is a struct. If it isnt we have to avoid
         /// checking for the @hasField
         const is_intrusive = blk: {
@@ -37,8 +37,8 @@ pub fn DaryHeap(comptime T: type, d: usize, comptime Context: type, comptime com
             }
             break :blk false;
         };
-        
-        /// Done for the intrusive event in heap. If the struct is 
+
+        /// Done for the intrusive event in heap. If the struct is
         inline fn writeItem(self: *Self, index: usize, item: T) void {
             self.items[index] = item;
             if (is_intrusive) {
@@ -47,9 +47,9 @@ pub fn DaryHeap(comptime T: type, d: usize, comptime Context: type, comptime com
         }
 
         pub fn init(context: Context) Self {
-            return .{ 
-                .items = &.{}, 
-                .capacity = 0, 
+            return .{
+                .items = &.{},
+                .capacity = 0,
                 .context = context,
                 .d = d,
             };
@@ -61,17 +61,11 @@ pub fn DaryHeap(comptime T: type, d: usize, comptime Context: type, comptime com
             .context = {},
             .d = d,
         } else @compileError("Cannot use empty with a non-void context. Use .init(context");
-        
+
         /// Free memory used by the queue.
         pub fn deinit(self: Self, gpa: Allocator) void {
             gpa.free(self.allocatedSlice());
             // self.* = undefined;
-        }
-
-        /// Insert a new element, maintaining priority.
-        pub fn add(self: *Self, gpa: Allocator, elem: T) !void {
-            try self.ensureUnusedCapacity(gpa, 1);
-            addUnchecked(self, elem);
         }
 
         fn addUnchecked(self: *Self, elem: T) void {
@@ -85,7 +79,7 @@ pub fn DaryHeap(comptime T: type, d: usize, comptime Context: type, comptime com
             var child_index = start_index;
             while (child_index > 0) {
                 // const parent_index = ((child_index - 1) >> 1); // for d = 2
-                const parent_index = ((child_index - 1) / self.d );
+                const parent_index = ((child_index - 1) / self.d);
                 const parent = self.items[parent_index];
                 if (compareFn(self.context, child, parent) != .lt) break;
 
@@ -97,7 +91,7 @@ pub fn DaryHeap(comptime T: type, d: usize, comptime Context: type, comptime com
         }
 
         /// Add each element in `items` to the queue.
-        pub fn addSlice(self: *Self, gpa: Allocator, items: []const T) !void {
+        pub fn addSlice(self: *Self, gpa: Allocator, items: []const T) error{OutOfMemory}!void {
             try self.ensureUnusedCapacity(gpa, items.len);
             for (items) |e| {
                 self.addUnchecked(e);
@@ -110,16 +104,22 @@ pub fn DaryHeap(comptime T: type, d: usize, comptime Context: type, comptime com
             return if (self.items.len > 0) self.items[0] else null;
         }
 
+        /// Remove and return the highest priority element from the
+        /// queue.
+        pub fn pop(self: *Self) T {
+            return self.removeIndex(0);
+        }
+
+        /// Insert a new element, maintaining priority.
+        pub fn push(self: *Self, gpa: Allocator, elem: T) error{OutOfMemory}!void {
+            try self.ensureUnusedCapacity(gpa, 1);
+            addUnchecked(self, elem);
+        }
+
         /// Pop the highest priority element from the queue. Returns
         /// `null` if empty.
         pub fn removeOrNull(self: *Self) ?T {
-            return if (self.items.len > 0) self.remove() else null;
-        }
-
-        /// Remove and return the highest priority element from the
-        /// queue.
-        pub fn remove(self: *Self) T {
-            return self.removeIndex(0);
+            return if (self.items.len > 0) self.pop() else null;
         }
 
         /// Remove and return element at index. Indices are in the
@@ -127,10 +127,10 @@ pub fn DaryHeap(comptime T: type, d: usize, comptime Context: type, comptime com
         /// order.
         pub fn removeIndex(self: *Self, index: usize) T {
             assert(self.items.len > index);
-            
+
             const last = self.items[self.items.len - 1];
             const item = self.items[index];
-            
+
             self.writeItem(index, last);
             //self.items[index] = last;
             self.items.len -= 1;
@@ -140,7 +140,7 @@ pub fn DaryHeap(comptime T: type, d: usize, comptime Context: type, comptime com
             } else if (index == 0) {
                 siftDown(self, index);
             } else {
-                const parent_index = ((index - 1) / self.d );
+                const parent_index = ((index - 1) / self.d);
                 const parent = self.items[parent_index];
                 if (compareFn(self.context, last, parent) == .gt) {
                     siftDown(self, index);
@@ -152,12 +152,11 @@ pub fn DaryHeap(comptime T: type, d: usize, comptime Context: type, comptime com
             return item;
         }
 
-        /// Return the number of elements remaining in the heap 
+        /// Return the number of elements remaining in the heap
         pub fn count(self: Self) usize {
             return self.items.len;
         }
 
-        
         /// Returns a slice of all the items plus the extra capacity, whose memory
         /// contents are `undefined`.
         fn allocatedSlice(self: Self) []T {
@@ -171,21 +170,21 @@ pub fn DaryHeap(comptime T: type, d: usize, comptime Context: type, comptime com
             while (true) {
                 const first_child_i = (std.math.mul(usize, index, d) catch break) + 1;
                 if (!(first_child_i < self.items.len)) break;
-    
+
                 var lesser_child_i = first_child_i;
                 var current_child_i = first_child_i + 1;
-                
+
                 const end_child_i = @min(self.items.len, first_child_i + d);
-                
+
                 while (current_child_i < end_child_i) : (current_child_i += 1) {
                     if (compareFn(self.context, self.items[current_child_i], self.items[lesser_child_i]) == .lt) {
                         lesser_child_i = current_child_i;
                     }
                 }
                 if (compareFn(self.context, target_element, self.items[lesser_child_i]) == .lt) break;
-                
+
                 self.writeItem(index, self.items[lesser_child_i]);
-               
+
                 index = lesser_child_i;
             }
             self.writeItem(index, target_element);
@@ -221,7 +220,7 @@ pub fn DaryHeap(comptime T: type, d: usize, comptime Context: type, comptime com
             try self.ensureTotalCapacityPrecise(gpa, better_capacity);
         }
 
-        pub fn ensureTotalCapacityPrecise(self: *Self, gpa: Allocator, new_capacity: usize) !void {
+        pub fn ensureTotalCapacityPrecise(self: *Self, gpa: Allocator, new_capacity: usize) error{OutOfMemory}!void {
             if (self.capacity >= new_capacity) return;
 
             const old_memory = self.allocatedSlice();
@@ -231,8 +230,8 @@ pub fn DaryHeap(comptime T: type, d: usize, comptime Context: type, comptime com
         }
 
         /// Ensure that the queue can fit at least `additional_count` **more** item.
-        pub fn ensureUnusedCapacity(self: *Self, gpa: Allocator, additional_count: usize) !void {
-            return self.ensureTotalCapacity(gpa, self.items.len + additional_count);
+        pub fn ensureUnusedCapacity(self: *Self, gpa: Allocator, additional_count: usize) error{OutOfMemory}!void {
+            return try self.ensureTotalCapacity(gpa, self.items.len + additional_count);
         }
 
         /// Reduce allocated capacity to `new_capacity`.
@@ -322,8 +321,6 @@ pub fn DaryHeap(comptime T: type, d: usize, comptime Context: type, comptime com
             print("capacity: {}", .{self.cap});
             print(" }}\n", .{});
         }
-        
-        
     };
 }
 
@@ -345,36 +342,36 @@ test "add and remove min heap" {
     var queue: PQlt = .empty;
     defer queue.deinit(ta);
 
-    try queue.add(ta, 54);
-    try queue.add(ta, 12);
-    try queue.add(ta, 7);
-    try queue.add(ta, 23);
-    try queue.add(ta, 25);
-    try queue.add(ta, 13);
-    try expectEqual(@as(u32, 7), queue.remove());
-    try expectEqual(@as(u32, 12), queue.remove());
-    try expectEqual(@as(u32, 13), queue.remove());
-    try expectEqual(@as(u32, 23), queue.remove());
-    try expectEqual(@as(u32, 25), queue.remove());
-    try expectEqual(@as(u32, 54), queue.remove());
+    try queue.push(ta, 54);
+    try queue.push(ta, 12);
+    try queue.push(ta, 7);
+    try queue.push(ta, 23);
+    try queue.push(ta, 25);
+    try queue.push(ta, 13);
+    try expectEqual(@as(u32, 7), queue.pop());
+    try expectEqual(@as(u32, 12), queue.pop());
+    try expectEqual(@as(u32, 13), queue.pop());
+    try expectEqual(@as(u32, 23), queue.pop());
+    try expectEqual(@as(u32, 25), queue.pop());
+    try expectEqual(@as(u32, 54), queue.pop());
 }
 
 test "add and remove same min heap" {
     var queue: PQlt = .empty;
     defer queue.deinit(ta);
 
-    try queue.add(ta, 1);
-    try queue.add(ta, 1);
-    try queue.add(ta, 2);
-    try queue.add(ta, 2);
-    try queue.add(ta, 1);
-    try queue.add(ta, 1);
-    try expectEqual(@as(u32, 1), queue.remove());
-    try expectEqual(@as(u32, 1), queue.remove());
-    try expectEqual(@as(u32, 1), queue.remove());
-    try expectEqual(@as(u32, 1), queue.remove());
-    try expectEqual(@as(u32, 2), queue.remove());
-    try expectEqual(@as(u32, 2), queue.remove());
+    try queue.push(ta, 1);
+    try queue.push(ta, 1);
+    try queue.push(ta, 2);
+    try queue.push(ta, 2);
+    try queue.push(ta, 1);
+    try queue.push(ta, 1);
+    try expectEqual(@as(u32, 1), queue.pop());
+    try expectEqual(@as(u32, 1), queue.pop());
+    try expectEqual(@as(u32, 1), queue.pop());
+    try expectEqual(@as(u32, 1), queue.pop());
+    try expectEqual(@as(u32, 2), queue.pop());
+    try expectEqual(@as(u32, 2), queue.pop());
 }
 
 test "removeOrNull on empty" {
@@ -388,12 +385,12 @@ test "edge case 3 elements" {
     var queue: PQlt = .empty;
     defer queue.deinit(ta);
 
-    try queue.add(ta, 9);
-    try queue.add(ta, 3);
-    try queue.add(ta, 2);
-    try expectEqual(@as(u32, 2), queue.remove());
-    try expectEqual(@as(u32, 3), queue.remove());
-    try expectEqual(@as(u32, 9), queue.remove());
+    try queue.push(ta, 9);
+    try queue.push(ta, 3);
+    try queue.push(ta, 2);
+    try expectEqual(@as(u32, 2), queue.pop());
+    try expectEqual(@as(u32, 3), queue.pop());
+    try expectEqual(@as(u32, 9), queue.pop());
 }
 
 test "peek" {
@@ -401,9 +398,9 @@ test "peek" {
     defer queue.deinit(ta);
 
     try expect(queue.peek() == null);
-    try queue.add(ta, 9);
-    try queue.add(ta, 3);
-    try queue.add(ta, 2);
+    try queue.push(ta, 9);
+    try queue.push(ta, 3);
+    try queue.push(ta, 2);
     try expectEqual(@as(u32, 2), queue.peek().?);
     try expectEqual(@as(u32, 2), queue.peek().?);
 }
@@ -413,12 +410,12 @@ test "sift up with odd indices" {
     defer queue.deinit(ta);
     const items = [_]u32{ 15, 7, 21, 14, 13, 22, 12, 6, 7, 25, 5, 24, 11, 16, 15, 24, 2, 1 };
     for (items) |e| {
-        try queue.add(ta, e);
+        try queue.push(ta, e);
     }
 
     const sorted_items = [_]u32{ 1, 2, 5, 6, 7, 7, 11, 12, 13, 14, 15, 15, 16, 21, 22, 24, 24, 25 };
     for (sorted_items) |e| {
-        try expectEqual(e, queue.remove());
+        try expectEqual(e, queue.pop());
     }
 }
 
@@ -430,7 +427,7 @@ test "addSlice" {
 
     const sorted_items = [_]u32{ 1, 2, 5, 6, 7, 7, 11, 12, 13, 14, 15, 15, 16, 21, 22, 24, 24, 25 };
     for (sorted_items) |e| {
-        try expectEqual(e, queue.remove());
+        try expectEqual(e, queue.pop());
     }
 }
 
@@ -450,7 +447,7 @@ test "fromOwnedSlice trivial case 1" {
     defer queue.deinit(ta);
 
     try expectEqual(@as(usize, 1), queue.count());
-    try expectEqual(items[0], queue.remove());
+    try expectEqual(items[0], queue.pop());
     try expect(queue.removeOrNull() == null);
 }
 
@@ -462,7 +459,7 @@ test "fromOwnedSlice" {
 
     const sorted_items = [_]u32{ 1, 2, 5, 6, 7, 7, 11, 12, 13, 14, 15, 15, 16, 21, 22, 24, 24, 25 };
     for (sorted_items) |e| {
-        try expectEqual(e, queue.remove());
+        try expectEqual(e, queue.pop());
     }
 }
 
@@ -470,36 +467,36 @@ test "add and remove max heap" {
     var queue: PQgt = .empty;
     defer queue.deinit(ta);
 
-    try queue.add(ta, 54);
-    try queue.add(ta, 12);
-    try queue.add(ta, 7);
-    try queue.add(ta, 23);
-    try queue.add(ta, 25);
-    try queue.add(ta, 13);
-    try expectEqual(@as(u32, 54), queue.remove());
-    try expectEqual(@as(u32, 25), queue.remove());
-    try expectEqual(@as(u32, 23), queue.remove());
-    try expectEqual(@as(u32, 13), queue.remove());
-    try expectEqual(@as(u32, 12), queue.remove());
-    try expectEqual(@as(u32, 7), queue.remove());
+    try queue.push(ta, 54);
+    try queue.push(ta, 12);
+    try queue.push(ta, 7);
+    try queue.push(ta, 23);
+    try queue.push(ta, 25);
+    try queue.push(ta, 13);
+    try expectEqual(@as(u32, 54), queue.pop());
+    try expectEqual(@as(u32, 25), queue.pop());
+    try expectEqual(@as(u32, 23), queue.pop());
+    try expectEqual(@as(u32, 13), queue.pop());
+    try expectEqual(@as(u32, 12), queue.pop());
+    try expectEqual(@as(u32, 7), queue.pop());
 }
 
 test "add and remove same max heap" {
     var queue: PQgt = .empty;
     defer queue.deinit(ta);
 
-    try queue.add(ta, 1);
-    try queue.add(ta, 1);
-    try queue.add(ta, 2);
-    try queue.add(ta, 2);
-    try queue.add(ta, 1);
-    try queue.add(ta, 1);
-    try expectEqual(@as(u32, 2), queue.remove());
-    try expectEqual(@as(u32, 2), queue.remove());
-    try expectEqual(@as(u32, 1), queue.remove());
-    try expectEqual(@as(u32, 1), queue.remove());
-    try expectEqual(@as(u32, 1), queue.remove());
-    try expectEqual(@as(u32, 1), queue.remove());
+    try queue.push(ta, 1);
+    try queue.push(ta, 1);
+    try queue.push(ta, 2);
+    try queue.push(ta, 2);
+    try queue.push(ta, 1);
+    try queue.push(ta, 1);
+    try expectEqual(@as(u32, 2), queue.pop());
+    try expectEqual(@as(u32, 2), queue.pop());
+    try expectEqual(@as(u32, 1), queue.pop());
+    try expectEqual(@as(u32, 1), queue.pop());
+    try expectEqual(@as(u32, 1), queue.pop());
+    try expectEqual(@as(u32, 1), queue.pop());
 }
 
 test "iterator" {
@@ -512,7 +509,7 @@ test "iterator" {
 
     const items = [_]u32{ 54, 12, 7, 23, 25, 13 };
     for (items) |e| {
-        _ = try queue.add(ta, e);
+        _ = try queue.push(ta, e);
         try map.put(e, {});
     }
 
@@ -530,7 +527,7 @@ test "remove at index" {
 
     const items = [_]u32{ 2, 1, 8, 9, 3, 4, 5 };
     for (items) |e| {
-        _ = try queue.add(ta, e);
+        _ = try queue.push(ta, e);
     }
 
     var it = queue.iterator();
@@ -566,9 +563,9 @@ test "shrinkAndFree" {
     try queue.ensureTotalCapacity(ta, 4);
     try expect(queue.capacity >= 4);
 
-    try queue.add(ta, 1);
-    try queue.add(ta, 2);
-    try queue.add(ta, 3);
+    try queue.push(ta, 1);
+    try queue.push(ta, 2);
+    try queue.push(ta, 3);
     try expect(queue.capacity >= 4);
     try expectEqual(@as(usize, 3), queue.count());
 
@@ -576,9 +573,9 @@ test "shrinkAndFree" {
     try expectEqual(@as(usize, 3), queue.capacity);
     try expectEqual(@as(usize, 3), queue.count());
 
-    try expectEqual(@as(u32, 1), queue.remove());
-    try expectEqual(@as(u32, 2), queue.remove());
-    try expectEqual(@as(u32, 3), queue.remove());
+    try expectEqual(@as(u32, 1), queue.pop());
+    try expectEqual(@as(u32, 2), queue.pop());
+    try expectEqual(@as(u32, 3), queue.pop());
     try expect(queue.removeOrNull() == null);
 }
 
@@ -586,70 +583,70 @@ test "update min heap" {
     var queue: PQlt = .empty;
     defer queue.deinit(ta);
 
-    try queue.add(ta, 55);
-    try queue.add(ta, 44);
-    try queue.add(ta, 11);
+    try queue.push(ta, 55);
+    try queue.push(ta, 44);
+    try queue.push(ta, 11);
     try queue.update(55, 5);
     try queue.update(44, 4);
     try queue.update(11, 1);
-    try expectEqual(@as(u32, 1), queue.remove());
-    try expectEqual(@as(u32, 4), queue.remove());
-    try expectEqual(@as(u32, 5), queue.remove());
+    try expectEqual(@as(u32, 1), queue.pop());
+    try expectEqual(@as(u32, 4), queue.pop());
+    try expectEqual(@as(u32, 5), queue.pop());
 }
 
 test "update same min heap" {
     var queue: PQlt = .empty;
     defer queue.deinit(ta);
 
-    try queue.add(ta, 1);
-    try queue.add(ta, 1);
-    try queue.add(ta, 2);
-    try queue.add(ta, 2);
+    try queue.push(ta, 1);
+    try queue.push(ta, 1);
+    try queue.push(ta, 2);
+    try queue.push(ta, 2);
     try queue.update(1, 5);
     try queue.update(2, 4);
-    try expectEqual(@as(u32, 1), queue.remove());
-    try expectEqual(@as(u32, 2), queue.remove());
-    try expectEqual(@as(u32, 4), queue.remove());
-    try expectEqual(@as(u32, 5), queue.remove());
+    try expectEqual(@as(u32, 1), queue.pop());
+    try expectEqual(@as(u32, 2), queue.pop());
+    try expectEqual(@as(u32, 4), queue.pop());
+    try expectEqual(@as(u32, 5), queue.pop());
 }
 
 test "update max heap" {
     var queue: PQgt = .empty;
     defer queue.deinit(ta);
 
-    try queue.add(ta, 55);
-    try queue.add(ta, 44);
-    try queue.add(ta, 11);
+    try queue.push(ta, 55);
+    try queue.push(ta, 44);
+    try queue.push(ta, 11);
     try queue.update(55, 5);
     try queue.update(44, 1);
     try queue.update(11, 4);
-    try expectEqual(@as(u32, 5), queue.remove());
-    try expectEqual(@as(u32, 4), queue.remove());
-    try expectEqual(@as(u32, 1), queue.remove());
+    try expectEqual(@as(u32, 5), queue.pop());
+    try expectEqual(@as(u32, 4), queue.pop());
+    try expectEqual(@as(u32, 1), queue.pop());
 }
 
 test "update same max heap" {
     var queue: PQgt = .empty;
     defer queue.deinit(ta);
 
-    try queue.add(ta, 1);
-    try queue.add(ta, 1);
-    try queue.add(ta, 2);
-    try queue.add(ta, 2);
+    try queue.push(ta, 1);
+    try queue.push(ta, 1);
+    try queue.push(ta, 2);
+    try queue.push(ta, 2);
     try queue.update(1, 5);
     try queue.update(2, 4);
-    try expectEqual(@as(u32, 5), queue.remove());
-    try expectEqual(@as(u32, 4), queue.remove());
-    try expectEqual(@as(u32, 2), queue.remove());
-    try expectEqual(@as(u32, 1), queue.remove());
+    try expectEqual(@as(u32, 5), queue.pop());
+    try expectEqual(@as(u32, 4), queue.pop());
+    try expectEqual(@as(u32, 2), queue.pop());
+    try expectEqual(@as(u32, 1), queue.pop());
 }
 
 test "update after remove" {
     var queue: PQlt = .empty;
     defer queue.deinit(ta);
 
-    try queue.add(ta, 1);
-    try expectEqual(@as(u32, 1), queue.remove());
+    try queue.push(ta, 1);
+    try expectEqual(@as(u32, 1), queue.pop());
     try expectError(error.ElementNotFound, queue.update(1, 1));
 }
 
@@ -663,7 +660,7 @@ test "siftUp in remove" {
 
     const sorted_items = [_]u32{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 100, 101, 103, 104, 105, 106 };
     for (sorted_items) |e| {
-        try expectEqual(e, queue.remove());
+        try expectEqual(e, queue.pop());
     }
 }
 
@@ -679,20 +676,20 @@ test "add and remove min heap with context comparator" {
     var queue = CPQlt.init(context[0..]);
     defer queue.deinit(ta);
 
-    try queue.add(ta, 0);
-    try queue.add(ta, 1);
-    try queue.add(ta, 2);
-    try queue.add(ta, 3);
-    try queue.add(ta, 4);
-    try queue.add(ta, 5);
-    try queue.add(ta, 6);
-    try expectEqual(@as(usize, 6), queue.remove());
-    try expectEqual(@as(usize, 4), queue.remove());
-    try expectEqual(@as(usize, 3), queue.remove());
-    try expectEqual(@as(usize, 1), queue.remove());
-    try expectEqual(@as(usize, 2), queue.remove());
-    try expectEqual(@as(usize, 0), queue.remove());
-    try expectEqual(@as(usize, 5), queue.remove());
+    try queue.push(ta, 0);
+    try queue.push(ta, 1);
+    try queue.push(ta, 2);
+    try queue.push(ta, 3);
+    try queue.push(ta, 4);
+    try queue.push(ta, 5);
+    try queue.push(ta, 6);
+    try expectEqual(@as(usize, 6), queue.pop());
+    try expectEqual(@as(usize, 4), queue.pop());
+    try expectEqual(@as(usize, 3), queue.pop());
+    try expectEqual(@as(usize, 1), queue.pop());
+    try expectEqual(@as(usize, 2), queue.pop());
+    try expectEqual(@as(usize, 0), queue.pop());
+    try expectEqual(@as(usize, 5), queue.pop());
 }
 
 fn lessThanEvent(context: void, a: Event, b: Event) Order {
@@ -703,7 +700,6 @@ fn lessThanEvent(context: void, a: Event, b: Event) Order {
 const Event = struct {
     heap_index: usize = 0,
     priority: f64,
-
 };
 
 const EHlt = Heap(Event, void, lessThanEvent);
@@ -716,80 +712,70 @@ test "intrusive behaviour" {
     const e2 = Event{ .priority = 2 };
     const e3 = Event{ .priority = 3 };
     const e4 = Event{ .priority = 4 };
-    
-    try queue.add(ta, e4);
-    try queue.add(ta, e3);
-    try queue.add(ta, e2);
-    try queue.add(ta, e1);
-    try expectEqual(@as(f64, 1), queue.remove().priority);
-    try expectEqual(@as(f64, 2), queue.remove().priority);
-    try expectEqual(@as(f64, 3), queue.remove().priority);
-    try expectEqual(@as(f64, 4), queue.remove().priority);
+
+    try queue.push(ta, e4);
+    try queue.push(ta, e3);
+    try queue.push(ta, e2);
+    try queue.push(ta, e1);
+    try expectEqual(@as(f64, 1), queue.pop().priority);
+    try expectEqual(@as(f64, 2), queue.pop().priority);
+    try expectEqual(@as(f64, 3), queue.pop().priority);
+    try expectEqual(@as(f64, 4), queue.pop().priority);
 }
 
 test "add and remove min heap multpile leafs" {
     inline for (.{ 2, 3, 4, 8 }) |d| {
-        
         const DHlt = DaryHeap(u32, d, void, lessThan);
         var queue: DHlt = .empty;
         defer queue.deinit(ta);
 
-        try queue.add(ta, 54);
-        try queue.add(ta, 12);
-        try queue.add(ta, 7);
-        try queue.add(ta, 23);
-        try queue.add(ta, 25);
-        try queue.add(ta, 13);
-        try expectEqual(@as(u32, 7), queue.remove());
-        try expectEqual(@as(u32, 12), queue.remove());
-        try expectEqual(@as(u32, 13), queue.remove());
-        try expectEqual(@as(u32, 23), queue.remove());
-        try expectEqual(@as(u32, 25), queue.remove());
-        try expectEqual(@as(u32, 54), queue.remove());
+        try queue.push(ta, 54);
+        try queue.push(ta, 12);
+        try queue.push(ta, 7);
+        try queue.push(ta, 23);
+        try queue.push(ta, 25);
+        try queue.push(ta, 13);
+        try expectEqual(@as(u32, 7), queue.pop());
+        try expectEqual(@as(u32, 12), queue.pop());
+        try expectEqual(@as(u32, 13), queue.pop());
+        try expectEqual(@as(u32, 23), queue.pop());
+        try expectEqual(@as(u32, 25), queue.pop());
+        try expectEqual(@as(u32, 54), queue.pop());
     }
 }
 
 test "add and remove same min heap multpile leafs" {
     inline for (.{ 3, 4, 8 }) |d| {
-        
         const DHlt = DaryHeap(u32, d, void, lessThan);
         var queue: DHlt = .empty;
         defer queue.deinit(ta);
 
-
-        try queue.add(ta, 1);
-        try queue.add(ta, 1);
-        try queue.add(ta, 2);
-        try queue.add(ta, 2);
-        try queue.add(ta, 1);
-        try queue.add(ta, 1);
-        try expectEqual(@as(u32, 1), queue.remove());
-        try expectEqual(@as(u32, 1), queue.remove());
-        try expectEqual(@as(u32, 1), queue.remove());
-        try expectEqual(@as(u32, 1), queue.remove());
-        try expectEqual(@as(u32, 2), queue.remove());
-        try expectEqual(@as(u32, 2), queue.remove());
+        try queue.push(ta, 1);
+        try queue.push(ta, 1);
+        try queue.push(ta, 2);
+        try queue.push(ta, 2);
+        try queue.push(ta, 1);
+        try queue.push(ta, 1);
+        try expectEqual(@as(u32, 1), queue.pop());
+        try expectEqual(@as(u32, 1), queue.pop());
+        try expectEqual(@as(u32, 1), queue.pop());
+        try expectEqual(@as(u32, 1), queue.pop());
+        try expectEqual(@as(u32, 2), queue.pop());
+        try expectEqual(@as(u32, 2), queue.pop());
     }
 }
-
 
 test "edge case 3 elements multpile leafs" {
-
     inline for (.{ 2, 3, 4, 8 }) |d| {
-        
         const DHlt = DaryHeap(u32, d, void, lessThan);
         var queue: DHlt = .empty;
         defer queue.deinit(ta);
 
-
-        try queue.add(ta, 9);
-        try queue.add(ta, 3);
-        try queue.add(ta, 2);
-        try expectEqual(@as(u32, 2), queue.remove());
-        try expectEqual(@as(u32, 3), queue.remove());
-        try expectEqual(@as(u32, 9), queue.remove());
-
+        try queue.push(ta, 9);
+        try queue.push(ta, 3);
+        try queue.push(ta, 2);
+        try expectEqual(@as(u32, 2), queue.pop());
+        try expectEqual(@as(u32, 3), queue.pop());
+        try expectEqual(@as(u32, 9), queue.pop());
     }
 }
-
-
